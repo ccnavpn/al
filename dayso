@@ -1,0 +1,384 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+import streamlit as st
+import time
+from model import lstm_model
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+from sklearn.linear_model import LinearRegression
+
+
+
+# Load data
+df = pd.read_csv('data.csv', usecols=['price'], index_col=False, encoding='ISO-8859-1')
+
+# Thay thế các giá trị thiếu bằng giá trị trung bình của cột tương ứng
+df.fillna(df.mean(), inplace=True)
+
+# Tách dữ liệu thành tập huấn luyện và tập kiểm tra
+X = df.drop('price', axis=1)
+y = df['price']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+
+# Xây dựng mô hình hồi quy tuyến tính trên tập huấn luyện
+regressor = LinearRegression()
+regressor.fit(X_train, y_train)
+
+# Sử dụng mô hình để dự đoán trên tập kiểm tra
+predictions = regressor.predict(X_test)
+
+# Tính độ lỗi trung bình bình phương trên tập kiểm tra
+error = mean_squared_error(y_test, predictions)
+print('Mean Squared Error:', error)
+
+# Normalize data
+def normalize_data(data):
+    scaler = MinMaxScaler()
+    train_scaled = scaler.fit_transform(data.values)
+    return scaler, train_scaled
+
+# Split data into training and testing sets
+df = pd.read_csv('data.csv', parse_dates=['time'], index_col='time', encoding='ISO-8859-1')
+# Thay thế các giá trị thiếu bằng giá trị trung bình của cột tương ứng
+df.fillna(df.mean(), inplace=True)
+
+# Tách dữ liệu thành tập huấn luyện và tập kiểm tra
+X = df.drop('label', axis=1)
+y = df['label']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+
+# Xây dựng mô hình hồi quy tuyến tính trên tập huấn luyện
+regressor = LinearRegression()
+regressor.fit(X_train, y_train)
+
+# Sử dụng mô hình để dự đoán trên tập kiểm tra
+predictions = regressor.predict(X_test)
+
+# Tính độ lỗi trung bình bình phương trên tập kiểm tra
+error = mean_squared_error(y_test, predictions)
+print('Mean Squared Error:', error)
+def split_data(data, n_train_hours):
+    train, test = data[:n_train_hours], data[n_train_hours:]
+    return train, test
+
+# Convert data into sequences
+def create_dataset(data, seq_len):
+    X, y = [], []
+    for i in range(seq_len, len(data)):
+        X.append(data[i-seq_len:i, 0])
+        y.append(data[i, 0])
+    return np.array(X), np.array(y)
+
+# Reshape data for LSTM
+def reshape_data(X_train, X_test):
+    X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+    X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+    return X_train, X_test
+
+# Build LSTM model
+def build_model(X_train):
+    model = Sequential()
+    model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
+    model.add(LSTM(units=50))
+    model.add(Dense(1))
+    return model
+
+# Compile model
+def compile_model(model):
+    model.compile(optimizer='adam', loss='mse')
+
+# Train model
+def train_model(model, X_train, y_train, X_test, y_test, epochs=10, batch_size=32):
+    history = model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test))
+    return history
+
+# Predict test data
+def predict_data(model, X_test):
+    y_pred = model.predict(X_test)
+    return y_pred
+
+# Inverse scaling of predicted data
+def inverse_transform(scaler, data):
+    data_inv = scaler.inverse_transform(data)
+    return data_inv
+
+# Create a new sequence for prediction using the last n_steps data points
+def create_new_sequence(data, seq_len, n_steps=1):
+    sequence = data[-seq_len:]
+    new_sequence = []
+    for i in range(n_steps):
+        X = np.array(sequence[-seq_len:]).reshape(1, seq_len, 1)
+        y = model.predict(X)
+        sequence = np.append(sequence, y)
+        new_sequence.append(y[0][0])
+    return new_sequence
+
+# Set the number of training hours
+n_train_hours = 24*365
+
+# Split data into training and testing sets
+train, test = split_data(df, n_train_hours)
+
+
+
+# Load data
+data = pd.read_csv('data.csv', usecols=['prediction'], index_col=False, encoding='ISO-8859-1')
+# Thay thế các giá trị thiếu bằng giá trị trung bình của cột tương ứng
+df.fillna(df.mean(), inplace=True)
+
+# Tách dữ liệu thành tập huấn luyện và tập kiểm tra
+X = df.drop('label', axis=1)
+y = df['label']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+
+# Xây dựng mô hình hồi quy tuyến tính trên tập huấn luyện
+regressor = LinearRegression()
+regressor.fit(X_train, y_train)
+
+# Sử dụng mô hình để dự đoán trên tập kiểm tra
+predictions = regressor.predict(X_test)
+
+# Tính độ lỗi trung bình bình phương trên tập kiểm tra
+error = mean_squared_error(y_test, predictions)
+print('Mean Squared Error:', error)
+
+# Normalize data
+scaler, train_scaled = normalize_data(train)
+
+# Convert data into sequences
+seq_len = 50
+X_train, y_train = create_dataset(train_scaled, seq_len)
+
+# Check if test dataset is empty
+if test.empty:
+    print('Test dataset is empty.')
+    X_test, y_test = None, None
+else:
+    # Normalize test data
+    test_scaled = scaler.transform(test.values)
+
+    # Convert test data into sequences
+    X_test, y_test = create_dataset(test_scaled, seq_len)
+
+
+
+# Load the CSV file into a dataframe
+test = pd.read_csv('data.csv', usecols=['prediction'], index_col=False, encoding='ISO-8859-1')
+# Thay thế các giá trị thiếu bằng giá trị trung bình của cột tương ứng
+df.fillna(df.mean(), inplace=True)
+
+# Tách dữ liệu thành tập huấn luyện và tập kiểm tra
+X = df.drop('label', axis=1)
+y = df['label']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+
+# Xây dựng mô hình hồi quy tuyến tính trên tập huấn luyện
+regressor = LinearRegression()
+regressor.fit(X_train, y_train)
+
+# Sử dụng mô hình để dự đoán trên tập kiểm tra
+predictions = regressor.predict(X_test)
+
+# Tính độ lỗi trung bình bình phương trên tập kiểm tra
+error = mean_squared_error(y_test, predictions)
+print('Mean Squared Error:', error)
+# Print the shape of the test dataframe
+print(f"Test dataframe shape: {test.shape}")
+
+# Initialize the MinMaxScaler object and fit to the training data
+scaler = MinMaxScaler()
+scaler.fit(train.values)
+
+
+# check if test dataframe is not empty
+if not test.empty:
+    X_test = scaler.transform(test.values)
+    X_test = np.array([X_test[i-seq_len:i] for i in range(seq_len, len(X_test))])
+    y_test = np.array([y_test[i] for i in range(seq_len, len(y_test))])
+else:
+    print("Test dataset is empty.")
+    X_test = None
+    y_test = None
+
+# Convert data into sequences
+df = pd.read_csv('data.csv', usecols=['prediction'], index_col=False, encoding='ISO-8859-1')
+# Thay thế các giá trị thiếu bằng giá trị trung bình của cột tương ứng
+df.fillna(df.mean(), inplace=True)
+
+seq_len = 50
+X_train, y_train = create_dataset(train_scaled, seq_len)
+X_test, y_test = create_dataset(scaler.transform(test.values), seq_len)
+
+# Reshape data for LSTM
+X_train, X_test = reshape_data(X_train, X_test)
+
+# Build and compile model
+model = build_model(X_train)
+compile_model(model)
+
+# Xây dựng mô hình hồi quy tuyến tính trên tập huấn luyện
+regressor = LinearRegression()
+regressor.fit(X_train, y_train)
+
+# Train model
+epochs = 10
+batch_size = 32
+history = train_model(model, X_train, y_train, X_test, y_test, epochs=epochs, batch_size=batch_size)
+
+
+# Plot training loss and validation loss
+def plot_loss(history):
+    plt.plot(history.history['loss'], label='train')
+    plt.plot(history.history['val_loss'], label='test')
+    plt.legend()
+    plt.show()
+
+# Predict test data
+y_pred = predict_data(model, X_test)
+
+# Plot predicted vs. actual
+plt.plot(y_test, label='actual')
+plt.plot(y_pred, label='predicted')
+plt.title('Actual vs. Predicted Prices')
+plt.xlabel('Time')
+plt.ylabel('Price')
+plt.legend()
+plt.show()
+
+# Convert predicted prices back to original scale
+y_pred_inv = inverse_transform(scaler, y_pred)
+
+errors = []
+predictions = model.predict(X_test)
+for i in range(len(predictions)):
+    error = mean_squared_error(y_test[i], predictions[i])
+    errors.append(error)
+
+# Display the first 10 predicted prices
+for i in range(len(y_pred_inv)):
+    if i >= len(y_pred_inv) or i >= len(y_test):
+        break
+    error = (y_test[i] - y_pred_inv[i]) / y_test[i]
+    errors.append(error)
+
+print(f"Predicted: {y_pred_inv[i][0]:.2f}, True: {y_test[i][0]:.2f}")
+
+# Create new sequence for prediction
+seq_len = 50
+n_steps = 50
+new_sequence = create_new_sequence(df['price'], seq_len, n_steps)
+
+# Inverse scaling of new sequence
+new_sequence = scaler.inverse_transform(np.array(new_sequence).reshape(-1, 1))
+
+# Plot original sequence and new sequence
+plt.plot(df['price'], label='original')
+plt.plot(range(len(df['price'])-n_steps, len(df['price'])+seq_len), new_sequence, label='predicted')
+plt.title('Original Sequence and New Sequence')
+plt.xlabel('Time')
+plt.ylabel('Price')
+plt.legend()
+plt.show()
+
+# Streamlit app to visualize predicted and actual prices
+st.set_page_config(page_title='LSTM Stock Price Prediction', page_icon=':chart_with_upwards_trend:', layout='wide')
+
+st.title('LSTM Stock Price Prediction')
+
+# Sidebar
+st.sidebar.header('User Input')
+
+# Load data
+df = pd.read_csv('data.csv', usecols=['price'], index_col=False)
+
+# Normalize data
+scaler, data_scaled = normalize_data(df)
+
+# Split data into training and testing sets
+n_train_hours = int(len(data_scaled) * 0.8)
+train, test = split_data(data_scaled, n_train_hours)
+
+# Create sequences from data
+seq_len = 30
+X_train, y_train = create_dataset(train, seq_len)
+X_test, y_test = create_dataset(test, seq_len)
+
+# Reshape data for LSTM
+X_train, X_test = reshape_data(X_train, X_test)
+
+# Build and compile model
+model = build_model(X_train)
+compile_model(model)
+
+# Train model
+epochs = 10
+batch_size = 32
+history = train_model(model, X_train, y_train, X_test, y_test, epochs=epochs, batch_size=batch_size)
+
+# Predict test data
+y_pred = predict_data(model, X_test)
+
+# Sử dụng mô hình để dự đoán trên tập kiểm tra
+predictions = regressor.predict(X_test)
+
+# Tính độ lỗi trung bình bình phương trên tập kiểm tra
+error = mean_squared_error(y_test, predictions)
+print('Mean Squared Error:', error)
+
+# Convert predicted prices back to original scale
+y_pred_inv = inverse_transform(scaler, y_pred)
+
+# Sidebar inputs
+default_n_steps = 30
+n_steps = st.sidebar.slider('Number of steps', 1, 100, default=default_n_steps)
+
+# Predict new sequence
+new_sequence = create_new_sequence(df['price'].values, seq_len, n_steps=n_steps)
+
+# Convert new sequence to a dataframe
+df_new = pd.DataFrame(new_sequence, columns=['price'])
+
+# Inverse transform new sequence
+df_new['price'] = inverse_transform(scaler, np.array(df_new['price']).reshape(-1, 1))
+
+# Plot actual and predicted prices
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(df['price'], label='actual')
+ax.plot(df_new['price'], label='predicted')
+
+# Create a new sequence for prediction using the last n_steps data points
+def create_new_sequence(data, seq_len, n_steps=1):
+    sequence = data[-seq_len:]
+    new_sequence = []
+    for i in range(n_steps):
+        X = np.array(sequence[-seq_len:]).reshape(1, seq_len, 1)
+        y = model.predict(X)
+        sequence = np.append(sequence, y)
+        new_sequence.append(y[0][0])
+    return new_sequence
+
+# Generate new prices
+n_steps = 30
+new_prices = create_new_sequence(data=train_scaled, seq_len=seq_len, n_steps=n_steps)
+
+# Inverse scaling of new prices
+new_prices_inv = inverse_transform(scaler=scaler, data=np.array(new_prices).reshape(-1, 1))
+
+# Add new prices to dataframe
+df_new = pd.DataFrame(new_prices_inv, columns=['price'])
+df_new['time'] = pd.date_range(start=df['time'].iloc[-1], periods=n_steps+1, freq='H')[1:]
+
+# Plot actual and predicted prices
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(df['price'], label='actual')
+ax.plot(df_new['price'], label='predicted')
+ax.set_xlabel('Time')
+ax.set_ylabel('Price')
+ax.set_title('Actual and predicted prices')
+ax.legend()
+plt.show()
+
